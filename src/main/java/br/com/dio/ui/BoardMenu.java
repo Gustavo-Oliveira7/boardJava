@@ -37,6 +37,7 @@ public class BoardMenu {
                 System.out.println("8 - Ver card");
                 System.out.println("9 - Voltar para o menu anterior um card");
                 System.out.println("10 - Sair");
+                System.out.println("11 - Relatório de bloqueios do card");
                 option = scanner.nextInt();
                 switch (option) {
                     case 1 -> createCard();
@@ -49,6 +50,7 @@ public class BoardMenu {
                     case 8 -> showCard();
                     case 9 -> System.out.println("Voltando para o menu anterior");
                     case 10 -> System.exit(0);
+                    case 11 -> showCardBlockReport();
                     default -> System.out.println("Opção inválida, informe uma opção do menu");
                 }
             }
@@ -57,6 +59,61 @@ public class BoardMenu {
             System.exit(0);
         }
     }
+
+    private void showCardBlockReport() throws SQLException {
+        System.out.println("Informe o id do card para gerar o relatório de bloqueios");
+        var cardId = scanner.nextLong();
+        try (var connection = getConnection()) {
+            var blockHistory = new br.com.dio.service.BlockQueryService(connection)
+                    .findByCardId(cardId);
+            if (blockHistory.isEmpty()) {
+                System.out.println("Este card não possui histórico de bloqueios.");
+                return;
+            }
+            System.out.println("=== Histórico de Bloqueios ===");
+            java.time.Duration totalBlockedTime = java.time.Duration.ZERO;
+            for (var block : blockHistory) {
+                var unblockMoment =
+                        (block.unblockedAt() != null)
+                                ? block.unblockedAt()
+                                : java.time.OffsetDateTime.now();
+                var blockDuration =
+                        java.time.Duration.between(block.blockedAt(), unblockMoment);
+                totalBlockedTime = totalBlockedTime.plus(blockDuration);
+                System.out.printf(
+                        """
+                        #%d
+                        Bloqueado em: %s
+                        Motivo bloqueio: %s
+                        Desbloqueado em: %s
+                        Motivo desbloqueio: %s
+                        Duração: %s
+                        """,
+                        block.id(),
+                        block.blockedAt(),
+                        block.blockReason(),
+                        (block.unblockedAt() != null ? block.unblockedAt() : "AINDA BLOQUEADO"),
+                        (block.unblockReason() != null ? block.unblockReason() : "-"),
+                        formatDuration(blockDuration)
+                );
+            }
+            System.out.printf("\nTempo total bloqueado: %s\n",
+                    formatDuration(totalBlockedTime));
+        }
+    }
+
+
+    private String formatDuration(java.time.Duration d) {
+        long minutes = d.toMinutes();
+        long hours = minutes / 60;
+        long days = hours / 24;
+        long remHours = hours % 24;
+        long remMinutes = minutes % 60;
+        if (days > 0) return days + "d " + remHours + "h " + remMinutes + "m";
+        if (hours > 0) return hours + "h " + remMinutes + "m";
+        return minutes + "m";
+    }
+
 
     private void createCard() throws SQLException{
         var card = new CardEntity();
